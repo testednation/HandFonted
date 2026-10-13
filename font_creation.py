@@ -203,7 +203,14 @@ def update_font_from_images(
 
             original_height = original_ymax - original_ymin
             original_glyph_width = original_xmax - original_xmin
-            target_ymin = original_ymin
+
+            # Simple baseline heuristic for descender characters
+            descender_chars = ['p', 'q', 'y', 'g', 'j']
+            if char_val in descender_chars:
+                # Adjust yMin down for descenders (approx 20% of the original height below baseline)
+                target_ymin = original_ymin - (original_height * 0.2)
+            else:
+                target_ymin = original_ymin
 
 
             height_factor = original_height/resized_height
