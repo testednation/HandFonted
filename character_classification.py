@@ -226,13 +226,17 @@ def assign_classes(probabilities):
 
     return assigned_sample_indices, assigned_probabilities, assigned_class_indices
 
-def classify_characters(list_of_char_images, model, OUTPUT_PATH=""):
+def classify_characters(list_of_char_images, model, OUTPUT_PATH="", use_global_assignment=False, confidence_threshold=0.5):
     """
     Predict the class of each character image using a pre-trained model.
     Args:
         list_of_char_images (list): List of character images to predict.
         model: Pre-trained model.
         OUTPUT_PATH(str): Path to save the predicted images.
+        use_global_assignment (bool): If True, forces a 1-to-1 mapping for the 52 characters (A-Z, a-z).
+                                      If False, allows freeform notes with repeating or missing characters,
+                                      picking the best example for each detected character.
+        confidence_threshold (float): Minimum confidence required to accept a character prediction (only for freeform mode).
     Returns:
         list: A list of tuples, where each tuple is (character_string, numpy.ndarray)    
     """
@@ -264,7 +268,31 @@ def classify_characters(list_of_char_images, model, OUTPUT_PATH=""):
         with torch.inference_mode():
             outputs = model(batch_tensor)
             probabilities = torch.softmax(outputs, dim=1)
-        orignal_indices, confidence, predicted_classes = assign_classes(probabilities)
+
+        if use_global_assignment:
+            orignal_indices, confidence, predicted_classes = assign_classes(probabilities)
+        else:
+            print("\n💡 [Info] Using Freeform Note Mode: Predicting characters independently.")
+            print("  - The algorithm will group all instances of the same predicted character.")
+            print(f"  - It will then automatically select the clearest/most confident instance of each character (above {confidence_threshold * 100:.0f}% confidence) to include in the final font file.")
+
+            raw_predicted_classes = torch.argmax(probabilities, dim=1)
+            raw_confidence = torch.max(probabilities, dim=1)[0]
+
+            best_instances = {}
+            for i, (pred, conf) in enumerate(zip(raw_predicted_classes.tolist(), raw_confidence.tolist())):
+                if conf < confidence_threshold:
+                    continue
+                if pred not in best_instances or conf > best_instances[pred]['conf']:
+                    best_instances[pred] = {'index': i, 'conf': conf}
+
+            if not best_instances:
+                print(f"⚠️ [Warning] No characters were detected with confidence >= {confidence_threshold}.")
+                return []
+
+            orignal_indices = torch.tensor([v['index'] for v in best_instances.values()])
+            confidence = torch.tensor([v['conf'] for v in best_instances.values()])
+            predicted_classes = torch.tensor(list(best_instances.keys()))
 
         images = [orignal_images[i] for i in orignal_indices.tolist()]
         predicted_labels = [classes[i] for i in predicted_classes.tolist()]
