@@ -85,6 +85,19 @@ def main():
         help='Directory to save the intermediate classified character images.'
     )
 
+    # --- Classification Arguments ---
+    parser.add_argument(
+        '--strict-template',
+        action='store_true',
+        help='If set, forces the strict 1-to-1 A-Z mapping (original HandFonted behavior) which assumes the image is exactly the A-Z, a-z template. Otherwise, handles freeform notes/handwriting.'
+    )
+    parser.add_argument(
+        '--confidence-threshold',
+        type=float,
+        default=0.5,
+        help='Minimum confidence (0.0 to 1.0) to accept a character prediction when using freeform notes mode. Default: 0.5.'
+    )
+
     args = parser.parse_args()
 
     # --- Ensure output directories exist ---
@@ -117,7 +130,9 @@ def main():
     char_images = classify_characters(
         list_of_char_images, 
         model=CLASSIFICATION_MODEL, 
-        OUTPUT_PATH=args.intermediate_dir
+        OUTPUT_PATH=args.intermediate_dir,
+        use_global_assignment=args.strict_template,
+        confidence_threshold=args.confidence_threshold
     )
     
     if not char_images:
